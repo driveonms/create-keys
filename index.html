@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Update only this variable to change target page -->
+  <script>
+    var targetPage = "/now.html";
+    window.location.href = targetPage;
+  </script>
+  <title>Redirecting...</title>
+</head>
+<body>
+  <p>If you are not redirected automatically, <a id="redirect-link" href="/now.html">click here</a>.</p>
+  <script>
+    // Keep the redirect link in sync
+    document.getElementById('redirect-link').href = targetPage;
+  </script>
+</body>
+</html>
