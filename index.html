@@ -1,31 +1,38 @@
+
 <!doctype html>
 
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Instant Keypair Generator (offline)</title>
+  <title>Offline Keypair Generator — Dark</title>
   <style>
     :root{font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial}
-    body{max-width:900px;margin:18px auto;padding:18px;line-height:1.45}
-    h1{font-size:1.25rem;margin:0 0 8px}
-    p.small{color:#444;margin:6px 0 18px;font-size:0.95rem}
-    .card{border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin:12px 0;background:#fff}
-    label{display:block;font-weight:600;margin-bottom:6px}
+    html,body{height:100%}
+    body{background:#0b0f14;color:#e6eef8;max-width:900px;margin:14px auto;padding:18px;line-height:1.5}
+    h1{font-size:1.25rem;margin:0 0 6px;color:#fff}
+    p.small{color:#9aa6b2;margin:6px 0 16px;font-size:0.95rem}
+    .card{border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px;margin:12px 0;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))}
+    label{display:block;font-weight:600;margin-bottom:6px;color:#cfe3ff}
     .row{display:flex;gap:8px;flex-wrap:wrap}
-    button, select{padding:8px 10px;border-radius:8px;border:1px solid #cbd5e1;background:#f8fafc}
-    pre{white-space:pre-wrap;word-break:break-word;background:#0f172a;color:#e6eef8;padding:12px;border-radius:8px;overflow:auto}
+    button, select{padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);color:#e6eef8}
+    button:active{transform:translateY(1px)}
+    pre{white-space:pre-wrap;word-break:break-word;background:#071018;color:#d7eef8;padding:12px;border-radius:8px;overflow:auto;border:1px solid rgba(255,255,255,0.03)}
     .controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-    .meta{font-size:0.9rem;color:#333;margin:6px 0}
+    .meta{font-size:0.9rem;color:#9aa6b2;margin:6px 0}
     .inline{display:inline-flex;gap:6px;align-items:center}
     .smallbutton{padding:6px 8px;font-size:0.85rem}
-    footer{font-size:0.85rem;color:#666;margin-top:18px}
+    textarea{background:#071018;color:#e6eef8;border:1px solid rgba(255,255,255,0.03);border-radius:8px}
+    footer{font-size:0.82rem;color:#7f8b95;margin-top:18px}
+    .danger{color:#ff9b9b}
     @media (max-width:420px){body{padding:12px}}
   </style>
 </head>
 <body>
-  <h1>Offline Keypair Generator (RSA-OAEP)</h1>
-  <p class="small">This page generates a public/private key pair inside your browser. It never leaves your device unless you copy or download it. Works fully offline — save the file and open it on your phone.</p>  <div class="card">
+  <h1>Offline Keypair Generator (Dark)</h1>
+  <p class="small">Generates a public/private RSA keypair **entirely in your browser**. The page clears any stored data on load so nothing from previous sessions remains. Save this file and open locally or host on GH Pages over HTTPS.</p>
+
+  <div class="card">
     <label for="alg">Algorithm & strength</label>
     <div class="controls">
       <select id="alg">
@@ -36,25 +43,31 @@
       <button id="downloadAll" class="smallbutton">Download PEM files</button>
       <button id="clear" class="smallbutton">Clear</button>
     </div>
-    <div class="meta">Tip: Use RSA for compatibility. If you need smaller/faster keys in production use modern curves (not shown here).</div>
-  </div>  <div class="card">
+    <div class="meta">Tip: 2048 is fast and compatible; 4096 is stronger but slower on phones.</div>
+  </div>
+
+  <div class="card">
     <label>Public Key (PEM) — shareable</label>
     <div class="row">
       <button id="copyPublic" class="smallbutton">Copy</button>
       <button id="downloadPublic" class="smallbutton">Download</button>
     </div>
     <pre id="publicPem">(no key yet)</pre>
-  </div>  <div class="card">
+  </div>
+
+  <div class="card">
     <label>Private Key (PEM) — keep secret</label>
     <div class="row">
       <button id="copyPrivate" class="smallbutton">Copy</button>
       <button id="downloadPrivate" class="smallbutton">Download</button>
     </div>
     <pre id="privatePem">(no key yet)</pre>
-  </div>  <div class="card">
+  </div>
+
+  <div class="card">
     <label>Quick test — encrypt with public, decrypt with private</label>
     <div class="meta">Type a short message and click <b>Encrypt & Decrypt</b>.</div>
-    <textarea id="testMsg" rows="3" style="width:100%;padding:8px;border-radius:8px;border:1px solid #cbd5e1;margin:8px 0">Hello!</textarea>
+    <textarea id="testMsg" rows="3" style="width:100%;padding:8px;border-radius:8px;margin:8px 0">Hello!</textarea>
     <div class="row">
       <button id="testBtn" class="smallbutton">Encrypt & Decrypt</button>
       <button id="copyCipher" class="smallbutton">Copy Ciphertext</button>
@@ -63,10 +76,61 @@
     <pre id="cipher">(no ciphertext)</pre>
     <label>Decrypted result</label>
     <pre id="plain">(no result)</pre>
-  </div>  <footer>Completely offline. No telemetry. If you want a downloadable single-file HTML, save this page on your device and open it in the browser.</footer>  <script>
-  // Utility helpers
+  </div>
+
+  <footer>Offline. No telemetry. The page tries to delete localStorage, sessionStorage, caches and IndexedDB entries on load so nothing persists between sessions.</footer>
+
+  <script>
+  // --- Secure wipe on load ---
+  async function wipeAllStoredData(){
+    try{
+      // local/session storage
+      try{ localStorage.clear(); } catch(e){}
+      try{ sessionStorage.clear(); } catch(e){}
+
+      // caches (Service Worker / Cache API)
+      if(window.caches && caches.keys){
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+
+      // IndexedDB: use indexedDB.databases() if available, otherwise attempt common names
+      if(indexedDB && indexedDB.databases){
+        const dbs = await indexedDB.databases();
+        await Promise.all(dbs.map(db => indexedDB.deleteDatabase(db.name)));
+      } else if(indexedDB){
+        // best-effort: try deleting a few likely names
+        const likely = ['key-store','keys','crypto-store','database'];
+        for(const n of likely) try{ indexedDB.deleteDatabase(n); }catch(e){}
+      }
+
+      // unregister service workers (if any)
+      if('serviceWorker' in navigator){
+        const regs = await navigator.serviceWorker.getRegistrations();
+        for(const r of regs) try{ await r.unregister(); } catch(e){}
+      }
+
+      // small pause to let deletions settle
+      await new Promise(r => setTimeout(r, 100));
+    }catch(e){
+      // non-fatal
+      console.warn('wipeAllStoredData error', e);
+    }
+  }
+
+  // run wipe immediately on page load
+  (async ()=>{ await wipeAllStoredData(); })();
+
+  // --- helpers ---
   function bufToBase64(buf){
-    return btoa(String.fromCharCode.apply(null, new Uint8Array(buf)));
+    // chunked conversion for large buffers
+    const bytes = new Uint8Array(buf);
+    const chunkSize = 0x8000; // 32KB
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+    }
+    return btoa(binary);
   }
   function base64ToBuf(b64){
     const bin = atob(b64);
@@ -76,8 +140,13 @@
   }
 
   function wrapPem(base64, label){
-    const lines = base64.match(/.{1,64}/g).join('\n');
-    return `-----BEGIN ${label}-----\n${lines}\n-----END ${label}-----`;
+    if(!base64) return `-----BEGIN ${label}-----
+-----END ${label}-----`;
+    const lines = (base64.match(/.{1,64}/g) || []).join('
+');
+    return `-----BEGIN ${label}-----
+${lines}
+-----END ${label}-----`;
   }
 
   // Elements
@@ -230,7 +299,18 @@
     copyToClipboard(lastCipherB64);
   });
 
-  // disable long-running operations on mobile with a safety
-  window.addEventListener('beforeunload', ()=>{});
-  </script></body>
+  // prevent accidental caching/restore by the browser's bfcache
+  window.addEventListener('pageshow', (ev)=>{
+    if(ev.persisted){
+      // if page was restored from bfcache, do a hard reload to ensure fresh state
+      try{ window.location.reload(); }catch(e){}
+    }
+  });
+
+  // final safety: revoke any created object URLs when page unloads
+  window.addEventListener('unload', ()=>{
+    // nothing to revoke centrally; object URLs are revoked after downloads
+  });
+  </script>
+</body>
 </html>
