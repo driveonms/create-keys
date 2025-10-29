@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Keypair Generator — Compact (Visible Controls)</title>
+  <link rel="icon" href="favicon.png">
+  <style>
+    /* Compact soft-dark layout optimized for mobile; stronger visible borders */
+    :root{
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+      color-scheme: dark;
+    }
+    html,body{height:100%;margin:0;padding:0;background:#0d1316;color:#e6eef8}
+    .page{max-width:980px;margin:0 auto;padding:10px 6px 24px 6px}
+    header{margin-bottom:8px}
+    h1{font-size:1.05rem;margin:4px 0}
+    p.small{margin:4px 0 10px 0;color:#b7ccd9;font-size:0.92rem}
+    /* box with stronger border */
+    .box{
+      background:#0b1114;
+      border:1.5px solid rgba(255,255,255,0.10);
+      border-radius:9px;
+      padding:10px;
+      margin-bottom:10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+    }
+    label{font-weight:600;font-size:0.95rem;margin-bottom:6px;display:block}
+    .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    select, button{
+      padding:8px;
+      border-radius:8px;
+      border:1.6px solid rgba(255,255,255,0.10);
+      background:#0c1418;
+      color:#e6eef8;
+      min-height:36px;
+      box-shadow: none;
+    }
+    select:focus, button:focus, textarea:focus, pre:focus { outline: 3px solid rgba(96,165,250,0.14); outline-offset: 2px; }
+    button.small{padding:6px 8px;font-size:0.88rem}
+    /* slightly higher contrast for actionable elements */
+    button.primary{background: linear-gradient(180deg, rgba(96,165,250,0.08), rgba(79,209,197,0.04)); border-color: rgba(96,165,250,0.20);}
+    pre{background:#061017;color:#d8eef8;padding:8px;border-radius:6px;overflow:auto;font-size:0.78rem;line-height:1.2;border:1.2px solid rgba(255,255,255,0.06)}
+    .meta{color:#9bb0c4;font-size:0.88rem;margin-top:6px}
+    .notes{font-size:0.86rem;color:#ffd8a6;margin-top:6px}
+    .muted{color:#97a8b7}
+    textarea{width:100%;padding:8px;border-radius:6px;background:#061017;color:#e6eef8;border:1.4px solid rgba(255,255,255,0.06)}
+    .row{display:flex;gap:6px;flex-wrap:wrap}
+    .progressBar{height:12px;background:#071017;border-radius:8px;overflow:hidden;border:1.2px solid rgba(255,255,255,0.04)}
+    .progressFill{height:100%;width:0;background:linear-gradient(90deg,#4fd1c5,#60a5fa);transition:width 220ms linear}
+    .labelRow{display:flex;justify-content:space-between;align-items:center;font-size:0.85rem;margin-top:6px}
+    .tiny{font-size:0.8rem;color:#9bb0c4}
+    .noteAlert{color:#ffd9a6;font-weight:600}
+    footer{font-size:0.78rem;color:#9bb0c4;margin-top:12px}
+    /* small screens: remove side padding and tighten */
+    @media (max-width:520px){
+      .page{padding:8px 6px 20px 6px}
+      select,button{font-size:0.95rem;min-height:38px}
+      pre{font-size:0.75rem}
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <h1>Offline Keypair Generator — Compact</h1>
+      <p class="small">Generates RSA keys in your browser. Click <b>Clear / Wipe</b> before each use. This is for learning — smaller sizes available but insecure for real use.</p>
+    </header>
+
+    <div class="box" id="controlsBox">
+      <label for="alg">Algorithm & size</label>
+      <div class="controls">
+        <select id="alg" aria-label="Select key size">
+          <option value="rsa-512">RSA 512 — learning (unsafe)</option>
+          <option value="rsa-1024">RSA 1024 — learning (unsafe)</option>
+          <option value="rsa-2048" selected>RSA 2048 — recommended (best tradeoff)</option>
+          <option value="rsa-4096">RSA 4096 — secure but slow</option>
+          <option value="rsa-8192">RSA 8192 — extreme (wasteful)</option>
+          <option value="rsa-16384">RSA 16384 — extreme (pointless)</option>
+        </select>
+
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+          <button id="generate" class="small primary" title="Start generating keypair">Generate</button>
+          <button id="abort" class="small" title="Abort (reload)">Abort (Reload)</button>
+        </div>
+      </div>
+
+      <div class="meta muted">Notes: 512/1024 insecure — experiments only. 2048 recommended. 4096 secure but slower. 8192/16384 extreme and wasteful.</div>
+
+      <div id="sizeWarning" class="notes" style="display:none">You chose ≥4096 — this will take some time.</div>
+
+      <div style="margin-top:8px">
+        <div class="progressBar"><div id="progressFill" class="progressFill" role="progressbar" aria-valuemin="0" aria-valuemax="100"></div></div>
+        <div class="labelRow">
+          <div id="progressText" class="tiny">Idle</div>
+          <div id="elapsed" class="tiny">00:00</div>
+        </div>
+      </div>
+
+      <div style="margin-top:10px" class="row">
+        <button id="downloadAll" class="small">Download PEM</button>
+        <button id="clear" class="small">Clear / Wipe</button>
+      </div>
+    </div>
+
+    <div class="box">
+      <label>Public Key (PEM) — shareable</label>
+      <div class="row" style="margin-bottom:6px">
+        <button id="copyPublic" class="small">Copy</button>
+        <button id="downloadPublic" class="small">Download</button>
+      </div>
+      <pre id="publicPem" tabindex="0" aria-label="Public key area">(no key yet)</pre>
+    </div>
+
+    <div class="box">
+      <label>Private Key (PEM) — keep secret</label>
+      <div class="row" style="margin-bottom:6px">
+        <button id="copyPrivate" class="small">Copy</button>
+        <button id="downloadPrivate" class="small">Download</button>
+      </div>
+      <pre id="privatePem" tabindex="0" aria-label="Private key area">(no key yet)</pre>
+    </div>
+
+    <div class="box">
+      <label>Quick test — encrypt & decrypt</label>
+      <textarea id="testMsg" rows="2">Hello</textarea>
+      <div class="row" style="margin-top:8px">
+        <button id="testBtn" class="small">Encrypt & Decrypt</button>
+        <button id="copyCipher" class="small">Copy Ciphertext</button>
+      </div>
+      <div style="margin-top:8px">
+        <div class="tiny">Ciphertext (base64)</div>
+        <pre id="cipher">(no ciphertext)</pre>
+        <div class="tiny">Decrypted</div>
+        <pre id="plain">(no result)</pre>
+      </div>
+    </div>
+
+    <footer>Made by ChatGPT — offline, no telemetry.</footer>
+  </div>
+
+  <script>
+  /* functional script kept compact — worker generation + ETA progress */
+  function safeB64(buf){
+    const bytes = new Uint8Array(buf);
+    const CH = 0x8000;
+    let s = '';
+    for (let i=0;i<bytes.length;i+=CH) s += String.fromCharCode.apply(null, bytes.subarray(i,i+CH));
+    return btoa(s);
+  }
+  function wrapPem(b64,label){
+    if(!b64) return `-----BEGIN ${label}-----\n-----END ${label}-----`;
+    const lines=(b64.match(/.{1,64}/g)||[]).join('\n');
+    return `-----BEGIN ${label}-----\n${lines}\n-----END ${label}-----`;
+  }
+
+  // DOM references
+  const generateBtn = document.getElementById('generate');
+  const abortBtn = document.getElementById('abort');
+  const alg = document.getElementById('alg');
+  const publicPemEl = document.getElementById('publicPem');
+  const privatePemEl = document.getElementById('privatePem');
+  const copyPublic = document.getElementById('copyPublic');
+  const copyPrivate = document.getElementById('copyPrivate');
+  const downloadPublic = document.getElementById('downloadPublic');
+  const downloadPrivate = document.getElementById('downloadPrivate');
+  const downloadAll = document.getElementById('downloadAll');
+  const clearBtn = document.getElementById('clear');
+  const testBtn = document.getElementById('testBtn');
+  const testMsg = document.getElementById('testMsg');
+  const cipherEl = document.getElementById('cipher');
+  const plainEl = document.getElementById('plain');
+  const copyCipher = document.getElementById('copyCipher');
+  const progressFill = document.getElementById('progressFill');
+  const progressText = document.getElementById('progressText');
+  const elapsedEl = document.getElementById('elapsed');
+  const sizeWarning = document.getElementById('sizeWarning');
+
+  let lastPublicPem='', lastPrivatePem='', lastCipherB64='';
+  let worker=null, simTimer=null, startTs=0, elapsedTimer=null, slowTimer=null;
+
+  // estimates in ms (conservative)
+  const EST = {512:300,1024:700,2048:1500,4096:7000,8192:25000,16384:90000};
+
+  async function wipeAll(){
+    try{ localStorage.clear(); }catch(e){}
+    try{ sessionStorage.clear(); }catch(e){}
+    try{ if(window.caches && caches.keys){ const ks=await caches.keys(); await Promise.all(ks.map(k=>caches.delete(k))); } }catch(e){}
+    try{ if(window.indexedDB && indexedDB.databases){ const dbs=await indexedDB.databases(); await Promise.all(dbs.map(db=> db.name ? indexedDB.deleteDatabase(db.name) : Promise.resolve())); } }catch(e){}
+    try{ if(navigator.serviceWorker){ const regs=await navigator.serviceWorker.getRegistrations(); for(const r of regs) await r.unregister(); } }catch(e){}
+    lastPublicPem=''; lastPrivatePem=''; lastCipherB64='';
+    publicPemEl.textContent='(no key yet)'; privatePemEl.textContent='(no key yet)';
+    cipherEl.textContent='(no ciphertext)'; plainEl.textContent='(no result)';
+    clearProgress();
+    alert('Cleared local storage and UI. You may now generate new keys.');
+  }
+
+  function setProgress(p, label){ progressFill.style.width = p + '%'; progressText.textContent = label; }
+  function clearProgress(){ if(simTimer) clearInterval(simTimer); simTimer=null; if(elapsedTimer) clearInterval(elapsedTimer); elapsedTimer=null; if(slowTimer) clearTimeout(slowTimer); slowTimer=null; setProgress(0,'Idle'); elapsedEl.textContent='00:00'; sizeWarning.style.display='none'; }
+
+  function startProgress(msEst){
+    clearProgress();
+    startTs = Date.now();
+    setProgress(2,'Starting...');
+    elapsedEl.textContent='00:00';
+    elapsedTimer = setInterval(()=>{ const s=Math.floor((Date.now()-startTs)/1000); elapsedEl.textContent = String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0'); }, 400);
+    const t0 = Date.now();
+    simTimer = setInterval(()=> {
+      const t = Date.now() - t0;
+      const frac = Math.min(0.999, t / msEst);
+      const eased = 1 - Math.pow(1-frac,2);
+      const pct = Math.max(2, Math.round(eased * 95));
+      setProgress(pct,'Generating...');
+    }, 180);
+    slowTimer = setTimeout(()=>{ sizeWarning.style.display='block'; }, Math.max(5000, msEst*0.4));
+  }
+
+  function finishProgress(){
+    if(simTimer) clearInterval(simTimer); simTimer=null;
+    if(elapsedTimer) clearInterval(elapsedTimer); elapsedTimer=null;
+    if(slowTimer) clearTimeout(slowTimer); slowTimer=null;
+    setProgress(100,'Done');
+  }
+
+  // worker code
+  const wcode = `
+    self.onmessage = async function(ev){
+      const bits = ev.data.bits;
+      try{
+        const kp = await crypto.subtle.generateKey(
+          { name: 'RSA-OAEP', modulusLength: bits, publicExponent: new Uint8Array([1,0,1]), hash: 'SHA-256' },
+          true, ['encrypt','decrypt']
+        );
+        const pub = await crypto.subtle.exportKey('spki', kp.publicKey);
+        const priv = await crypto.subtle.exportKey('pkcs8', kp.privateKey);
+        self.postMessage({success:true, pub: pub, priv: priv}, [pub, priv]);
+      }catch(e){
+        self.postMessage({success:false, error:(e && e.message)? e.message : String(e)});
+      }
+    };
+  `;
+  const wblob = new Blob([wcode], {type:'text/javascript'});
+  const wurl = URL.createObjectURL(wblob);
+
+  function generateKey(){
+    let bits = 2048;
+    const v = alg.value;
+    if(v==='rsa-512') bits=512;
+    if(v==='rsa-1024') bits=1024;
+    if(v==='rsa-2048') bits=2048;
+    if(v==='rsa-4096') bits=4096;
+    if(v==='rsa-8192') bits=8192;
+    if(v==='rsa-16384') bits=16384;
+
+    sizeWarning.style.display = bits >= 4096 ? 'block' : 'none';
+
+    generateBtn.disabled = true;
+    generateBtn.textContent = 'Generating...';
+    startProgress(EST[bits] || 1500);
+
+    if(worker){ worker.terminate(); worker=null; }
+    worker = new Worker(wurl);
+
+    worker.onmessage = function(ev){
+      const d = ev.data;
+      if(d.success){
+        try{
+          const pubB64 = safeB64(d.pub);
+          const privB64 = safeB64(d.priv);
+          lastPublicPem = wrapPem(pubB64,'PUBLIC KEY');
+          lastPrivatePem = wrapPem(privB64,'PRIVATE KEY');
+          publicPemEl.textContent = lastPublicPem;
+          privatePemEl.textContent = lastPrivatePem;
+          cipherEl.textContent='(no ciphertext)'; plainEl.textContent='(no result)';
+          finishProgress();
+        }catch(e){
+          clearProgress();
+          alert('Processing error: ' + (e && e.message ? e.message : e));
+        }
+      } else {
+        clearProgress();
+        alert('Generation failed: ' + (d.error || 'unknown'));
+      }
+      generateBtn.disabled = false;
+      generateBtn.textContent = 'Generate';
+      if(worker){ worker.terminate(); worker=null; }
+    };
+
+    worker.onerror = function(err){
+      clearProgress();
+      generateBtn.disabled = false;
+      generateBtn.textContent = 'Generate';
+      alert('Worker error: ' + (err && err.message ? err.message : err));
+      if(worker){ worker.terminate(); worker=null; }
+    };
+
+    try{
+      worker.postMessage({bits: bits});
+    }catch(e){
+      clearProgress();
+      generateBtn.disabled = false;
+      generateBtn.textContent = 'Generate';
+      alert('Cannot start worker: '+ (e && e.message ? e.message : e));
+      if(worker){ worker.terminate(); worker=null; }
+    }
+  }
+
+  // utilities
+  function download(name, text){ const a=document.createElement('a'); const blob=new Blob([text],{type:'application/octet-stream'}); a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1500); }
+  async function copyText(text){ try{ await navigator.clipboard.writeText(text); alert('Copied'); } catch(e){ const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); alert('Copied'); }catch(e){ alert('Copy failed'); } ta.remove(); } }
+
+  clearBtn.addEventListener('click', ()=>{ if(confirm('Clear all stored data and UI?')) wipeAll(); });
+  generateBtn.addEventListener('click', generateKey);
+  abortBtn.addEventListener('click', ()=>{ if(confirm('Abort will reload the page and stop the operation. Continue?')) location.reload(); });
+  downloadPublic.addEventListener('click', ()=>{ if(!lastPublicPem) return alert('No public key'); download('public.pem', lastPublicPem); });
+  downloadPrivate.addEventListener('click', ()=>{ if(!lastPrivatePem) return alert('No private key'); download('private.pem', lastPrivatePem); });
+  downloadAll.addEventListener('click', ()=>{ if(!lastPublicPem && !lastPrivatePem) return alert('No keys'); if(lastPublicPem) download('public.pem', lastPublicPem); if(lastPrivatePem) download('private.pem', lastPrivatePem); });
+
+  copyPublic.addEventListener('click', ()=>{ if(!lastPublicPem) return alert('No public key'); copyText(lastPublicPem); });
+  copyPrivate.addEventListener('click', ()=>{ if(!lastPrivatePem) return alert('No private key'); copyText(lastPrivatePem); });
+
+  async function importAndTest(){
+    if(!lastPublicPem || !lastPrivatePem) return alert('No keys generated');
+    try{
+      function pemToBuf(pem){ const b64=pem.replace(/-----.*-----/g,'').replace(/\s+/g,''); const bin=atob(b64); const arr=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i); return arr.buffer; }
+      const pubBuf = pemToBuf(lastPublicPem), privBuf = pemToBuf(lastPrivatePem);
+      const pubKey = await crypto.subtle.importKey('spki', pubBuf, {name:'RSA-OAEP',hash:'SHA-256'}, false, ['encrypt']);
+      const privKey = await crypto.subtle.importKey('pkcs8', privBuf, {name:'RSA-OAEP',hash:'SHA-256'}, false, ['decrypt']);
+      const text = testMsg.value || '';
+      const enc = new TextEncoder().encode(text);
+      const cipher = await crypto.subtle.encrypt({name:'RSA-OAEP'}, pubKey, enc);
+      const b64 = safeB64(cipher);
+      lastCipherB64 = b64;
+      cipherEl.textContent = b64;
+      const dec = await crypto.subtle.decrypt({name:'RSA-OAEP'}, privKey, cipher);
+      plainEl.textContent = new TextDecoder().decode(dec);
+    }catch(e){
+      alert('Encrypt/Decrypt failed: ' + (e && e.message ? e.message : e));
+    }
+  }
+
+  testBtn.addEventListener('click', importAndTest);
+  copyCipher.addEventListener('click', ()=>{ if(!lastCipherB64) return alert('No ciphertext'); copyText(lastCipherB64); });
+
+  window.addEventListener('load', ()=>{ clearProgress(); console.log('Click Clear/Wipe before generating keys.'); });
+  window.addEventListener('pageshow', (ev)=>{ if(ev.persisted) console.log('Page restored — click Clear to wipe previous state.'); });
+
+  </script>
+</body>
+</html>
